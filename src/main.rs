@@ -1,5 +1,12 @@
 use rustyline::{error::ReadlineError, DefaultEditor, Result};
 
+pub enum MetaCommandResult {
+    Success,
+    UnrecognizedCommand,
+}
+
+const EXIT_SUCCESS: i32 = 0;
+
 fn main() -> Result<()> {
     let mut rl = DefaultEditor::new()?;
 
@@ -7,11 +14,15 @@ fn main() -> Result<()> {
         let readline = rl.readline("lildb > ");
         match readline {
             Ok(line) => {
-                if line == ".exit" {
-                    println!("Exiting...");
-                    break;
+                if line.starts_with(".") {
+                    match do_meta_command(&line) {
+                        MetaCommandResult::Success => continue,
+                        MetaCommandResult::UnrecognizedCommand => {
+                            println!("Unrecognized command: {}", line);
+                            continue;
+                        }
+                    }
                 }
-                println!("Unrecognized command: {}", line);
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -29,4 +40,12 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn do_meta_command(line: &str) -> MetaCommandResult {
+    if line == ".exit" {
+        println!("Exiting...");
+        std::process::exit(EXIT_SUCCESS);
+    }
+    MetaCommandResult::UnrecognizedCommand
 }
