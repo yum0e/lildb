@@ -8,6 +8,7 @@ use crate::row::{Row, COLUMN_EMAIL_SIZE, COLUMN_USERNAME_SIZE, ROW_SIZE};
 mod macro_helper;
 mod paint;
 mod row;
+mod table;
 
 const EXIT_SUCCESS: i32 = 0;
 pub enum MetaCommandResult {
