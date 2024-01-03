@@ -78,6 +78,27 @@ impl Row {
         serialized_row
     }
 
+    pub fn deserialize(&self, source: [u8; ROW_SIZE]) -> anyhow::Result<Row> {
+        let mut row = Row {
+            id: 0,
+            username: [0; COLUMN_USERNAME_SIZE],
+            email: [0; COLUMN_EMAIL_SIZE],
+        };
+
+        row.id = u32::from_le_bytes(source[ID_OFFSET..ID_OFFSET + ID_SIZE].try_into().context(
+            format!(
+                "{}",
+                "Failed to convert the id bytes into a u32 value.".error()
+            ),
+        )?);
+        row.username
+            .copy_from_slice(&source[USERNAME_OFFSET..USERNAME_OFFSET + USERNAME_SIZE]);
+        row.email
+            .copy_from_slice(&source[EMAIL_OFFSET..EMAIL_OFFSET + EMAIL_SIZE]);
+
+        Ok(row)
+    }
+
     pub fn username(&self) -> String {
         let mut username = String::new();
         for byte in &self.username {
@@ -228,8 +249,12 @@ fn parsing_statement(line: &str) -> anyhow::Result<StatementCommandResult> {
             email,
         };
 
-        let serialized_row = row.serialize([0; ROW_SIZE]);
+        let source = [0; ROW_SIZE];
+        let serialized_row = row.serialize(source);
         println!("serialized_row: {:?}", serialized_row);
+
+        let deserialized_row = row.deserialize(serialized_row)?;
+        println!("deserialized_row: {:?}", deserialized_row);
 
         println!(
             "{}",
