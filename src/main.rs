@@ -1,10 +1,13 @@
 use anyhow::Context;
 use paint::Paintable;
 use rustyline::{error::ReadlineError, DefaultEditor, Result};
-use std::fmt::Debug;
 use yansi::Color;
 
+use crate::row::{Row, COLUMN_EMAIL_SIZE, COLUMN_USERNAME_SIZE, ROW_SIZE};
+
+mod macro_helper;
 mod paint;
+mod row;
 
 const EXIT_SUCCESS: i32 = 0;
 pub enum MetaCommandResult {
@@ -32,117 +35,7 @@ impl std::fmt::Display for Statement {
     }
 }
 
-// this macro has been taken from this stack overflow post: https://stackoverflow.com/questions/61046063/how-to-get-the-size-of-a-struct-field-in-rust-without-instantiating-it
-macro_rules! field_size {
-    ($t:ident :: $field:ident) => {{
-        let m = core::mem::MaybeUninit::<$t>::uninit();
-        // According to https://doc.rust-lang.org/stable/std/ptr/macro.addr_of_mut.html#examples,
-        // you can dereference an uninitialized MaybeUninit pointer in addr_of!
-        // Raw pointer deref in const contexts is stabilized in 1.58:
-        // https://github.com/rust-lang/rust/pull/89551
-        let p = unsafe { core::ptr::addr_of!((*(&m as *const _ as *const $t)).$field) };
-
-        const fn size_of_raw<T>(_: *const T) -> usize {
-            core::mem::size_of::<T>()
-        }
-        size_of_raw(p)
-    }};
-}
-
-const COLUMN_USERNAME_SIZE: usize = 32;
-const COLUMN_EMAIL_SIZE: usize = 255;
-const ID_SIZE: usize = field_size!(Row::id);
-const USERNAME_SIZE: usize = field_size!(Row::username);
-const EMAIL_SIZE: usize = field_size!(Row::email);
-const ID_OFFSET: usize = 0;
-const USERNAME_OFFSET: usize = ID_OFFSET + ID_SIZE;
-const EMAIL_OFFSET: usize = USERNAME_OFFSET + USERNAME_SIZE;
-const ROW_SIZE: usize = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
-#[derive(Debug)]
-pub struct Row {
-    pub id: u32,
-    username: [u8; COLUMN_USERNAME_SIZE],
-    email: [u8; COLUMN_EMAIL_SIZE],
-}
-
-impl Row {
-    pub fn serialize(&self, destination: [u8; ROW_SIZE]) -> [u8; ROW_SIZE] {
-        let mut serialized_row = destination;
-        serialized_row[ID_OFFSET..ID_OFFSET + ID_SIZE].copy_from_slice(&self.id.to_le_bytes());
-
-        serialized_row[USERNAME_OFFSET..USERNAME_OFFSET + USERNAME_SIZE]
-            .copy_from_slice(&self.username);
-
-        serialized_row[EMAIL_OFFSET..EMAIL_OFFSET + EMAIL_SIZE].copy_from_slice(&self.email);
-
-        serialized_row
-    }
-
-    pub fn deserialize(&self, source: [u8; ROW_SIZE]) -> anyhow::Result<Row> {
-        let mut row = Row {
-            id: 0,
-            username: [0; COLUMN_USERNAME_SIZE],
-            email: [0; COLUMN_EMAIL_SIZE],
-        };
-
-        row.id = u32::from_le_bytes(source[ID_OFFSET..ID_OFFSET + ID_SIZE].try_into().context(
-            format!(
-                "{}",
-                "Failed to convert the id bytes into a u32 value.".error()
-            ),
-        )?);
-        row.username
-            .copy_from_slice(&source[USERNAME_OFFSET..USERNAME_OFFSET + USERNAME_SIZE]);
-        row.email
-            .copy_from_slice(&source[EMAIL_OFFSET..EMAIL_OFFSET + EMAIL_SIZE]);
-
-        Ok(row)
-    }
-
-    pub fn username(&self) -> String {
-        let mut username = String::new();
-        for byte in &self.username {
-            if *byte == 0 {
-                break;
-            }
-            username.push(*byte as char);
-        }
-        username
-    }
-
-    pub fn email(&self) -> String {
-        let mut email = String::new();
-        for byte in &self.email {
-            if *byte == 0 {
-                break;
-            }
-            email.push(*byte as char);
-        }
-        email
-    }
-}
-
-impl std::fmt::Display for Row {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Row {{ id: {}, username: {}, email: {} }}",
-            self.id,
-            self.username(),
-            self.email()
-        )
-    }
-}
-
 fn main() -> Result<()> {
-    println!("size of val id:{}", ID_SIZE);
-    println!("offset of val id:{}", ID_OFFSET);
-    println!("size of val username:{}", USERNAME_SIZE);
-    println!("offset of val username:{}", USERNAME_OFFSET);
-    println!("size of val email:{}", EMAIL_SIZE);
-    println!("offset of val email:{}", EMAIL_OFFSET);
-    println!("size of val row:{}", ROW_SIZE);
-
     let mut rl = DefaultEditor::new()?;
 
     loop {
