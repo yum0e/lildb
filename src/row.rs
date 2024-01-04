@@ -1,14 +1,14 @@
 use crate::paint::Paintable;
 
-pub const COLUMN_USERNAME_SIZE: usize = 32;
-pub const COLUMN_EMAIL_SIZE: usize = 255;
-// pub const ID_SIZE: usize = macro_helper::field_size!(Row::id);
-// pub const USERNAME_SIZE: usize = macro_helper::field_size!(Row::username);
-// pub const EMAIL_SIZE: usize = macro_helper::field_size!(Row::email);
-// pub const ID_OFFSET: usize = 0;
-// pub const USERNAME_OFFSET: usize = ID_OFFSET + ID_SIZE;
-// pub const EMAIL_OFFSET: usize = USERNAME_OFFSET + USERNAME_SIZE;
-pub const ROW_SIZE: usize = 288; // ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
+// the only data we are storing in a row is an id, a username and an email
+// this is a total of 288 bytes (1 + 32 + 255)
+pub const ID_SIZE: usize = 1;
+pub const USERNAME_SIZE: usize = 32;
+pub const EMAIL_SIZE: usize = 255;
+pub const ID_OFFSET: usize = 0;
+pub const USERNAME_OFFSET: usize = ID_OFFSET + ID_SIZE;
+pub const EMAIL_OFFSET: usize = USERNAME_OFFSET + USERNAME_SIZE;
+pub const ROW_SIZE: usize = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 
 #[derive(Debug)]
 pub struct Row {
@@ -19,15 +19,37 @@ pub struct Row {
 }
 
 impl Row {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Self {
             data: [0; ROW_SIZE],
         }
     }
 
+    pub fn new(id: &str, username: &str, email: &str) -> anyhow::Result<Self> {
+        let mut data = [0; ROW_SIZE];
+        data[ID_OFFSET] = id.parse::<u8>().unwrap();
+
+        if username.len() > USERNAME_SIZE {
+            return Err(anyhow::Error::msg(format!("Username is too long.")));
+        }
+        data[USERNAME_OFFSET..USERNAME_OFFSET + username.len()]
+            .copy_from_slice(username.as_bytes());
+
+        if email.len() > EMAIL_SIZE {
+            return Err(anyhow::Error::msg(format!("Email is too long.")));
+        }
+        data[EMAIL_OFFSET..EMAIL_OFFSET + email.len()].copy_from_slice(email.as_bytes());
+
+        Ok(Self { data })
+    }
+
+    pub fn id(&self) -> u8 {
+        self.data[0]
+    }
+
     pub fn username(&self) -> String {
         let mut username = String::new();
-        for byte in &self.data[1..33] {
+        for byte in &self.data[USERNAME_OFFSET..USERNAME_OFFSET + USERNAME_SIZE] {
             if *byte == 0 {
                 break;
             }
@@ -38,7 +60,7 @@ impl Row {
 
     pub fn email(&self) -> String {
         let mut email = String::new();
-        for byte in &self.data[33..] {
+        for byte in &self.data[EMAIL_OFFSET..EMAIL_OFFSET + EMAIL_SIZE] {
             if *byte == 0 {
                 break;
             }
@@ -51,7 +73,7 @@ impl Row {
         println!(
             "{}",
             format!("| {:<6} | {:<15} | {:<20} |", "id", "username", "email")
-                .paint(yansi::Color::Cyan)
+                .paint(yansi::Color::Yellow)
         );
     }
 
@@ -60,11 +82,11 @@ impl Row {
             "{}",
             format!(
                 "| {:<6} | {:<15} | {:<20} |",
-                self.data[0],
+                self.id(),
                 self.username(),
                 self.email()
             )
-            .paint(yansi::Color::Cyan)
+            .paint(yansi::Color::Yellow)
         );
     }
 }

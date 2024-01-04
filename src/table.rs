@@ -1,32 +1,15 @@
 use crate::{
-    paint::Paintable,
+    page::{Page, PAGE_SIZE},
     row::{Row, ROW_SIZE},
     Statement, StatementCommandResult,
 };
 
-const PAGE_SIZE: usize = 291;
-const TABLE_MAX_PAGES: usize = 3;
-const ROWS_PER_PAGE: usize = PAGE_SIZE / ROW_SIZE;
-// const TABLE_MAX_ROWS: usize = ROWS_PER_PAGE * TABLE_MAX_PAGES;
+pub const TABLE_MAX_PAGES: usize = 100;
+pub const ROWS_PER_PAGE: usize = PAGE_SIZE / ROW_SIZE;
 
 #[derive(Debug)]
 pub struct Table {
     pub pages: Vec<Page>,
-}
-
-#[derive(Debug)]
-pub struct Page {
-    pub nb_rows: usize,
-    pub rows: Vec<Row>,
-}
-
-impl Page {
-    fn new() -> Self {
-        Self {
-            nb_rows: 0,
-            rows: Vec::with_capacity(ROWS_PER_PAGE),
-        }
-    }
 }
 
 impl Table {
@@ -60,7 +43,7 @@ impl Table {
         match statement {
             Statement::Insert(row) => {
                 if self.pages.len() >= TABLE_MAX_PAGES {
-                    return StatementCommandResult::SyntaxError("Error: Table full.".error());
+                    return StatementCommandResult::SyntaxError("Error: Table full.".to_string());
                 }
 
                 self.insert_row(row.data);

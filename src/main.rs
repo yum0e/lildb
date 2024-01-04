@@ -1,12 +1,12 @@
-use anyhow::Context;
 use paint::Paintable;
 use rustyline::{error::ReadlineError, DefaultEditor, Result};
 use table::Table;
 use yansi::Color;
 
-use crate::row::{Row, COLUMN_EMAIL_SIZE, COLUMN_USERNAME_SIZE, ROW_SIZE};
+use crate::row::Row;
 
 mod macro_helper;
+mod page;
 mod paint;
 mod row;
 mod table;
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
                             continue;
                         }
                         StatementCommandResult::SyntaxError(error) => {
-                            println!("{}", error);
+                            println!("{}", error.error());
                             continue;
                         }
                         StatementCommandResult::Unrecognized => {
@@ -106,44 +106,15 @@ fn parsing_statement(table: &mut Table, line: &str) -> anyhow::Result<StatementC
     if line.contains("insert") {
         let input = line.split_whitespace().collect::<Vec<&str>>();
         if input.len() != 4 {
-            return Ok(StatementCommandResult::SyntaxError(format!(
-                "{}",
-                "Insert command takes exactly 3 args.".error()
-            )));
+            return Ok(StatementCommandResult::SyntaxError(
+                "Insert command takes exactly 3 args.".to_string(),
+            ));
         }
 
-        if input[2].len() > COLUMN_USERNAME_SIZE {
-            return Ok(StatementCommandResult::SyntaxError(format!(
-                "{}",
-                "Username is too long.".error()
-            )));
+        match Row::new(input[1], input[2], input[3]) {
+            Ok(row) => return Ok(Table::execute(table, Statement::Insert(row))),
+            Err(error) => return Ok(StatementCommandResult::SyntaxError(error.to_string())),
         }
-
-        if input[3].len() > COLUMN_EMAIL_SIZE {
-            return Ok(StatementCommandResult::SyntaxError(format!(
-                "{}",
-                "Email is too long.".error()
-            )));
-        }
-
-        let mut username: [u8; COLUMN_USERNAME_SIZE] = [0; COLUMN_USERNAME_SIZE];
-        let mut email: [u8; COLUMN_EMAIL_SIZE] = [0; COLUMN_EMAIL_SIZE];
-
-        username[..input[2].len()].copy_from_slice(input[2].as_bytes());
-        email[..input[3].len()].copy_from_slice(input[3].as_bytes());
-
-        let row = Row {
-            data: [
-                [input[1].parse::<u8>().context("Error: Invalid id.")?].to_vec(),
-                username.to_vec(),
-                email.to_vec(),
-            ]
-            .concat()[..ROW_SIZE]
-                .try_into()
-                .unwrap(),
-        };
-
-        return Ok(Table::execute(table, Statement::Insert(row)));
     }
 
     if line.contains("select") {
