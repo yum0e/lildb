@@ -1,6 +1,7 @@
 use anyhow::Context;
 use paint::Paintable;
 use rustyline::{error::ReadlineError, DefaultEditor, Result};
+use table::Table;
 use yansi::Color;
 
 use crate::row::{Row, COLUMN_EMAIL_SIZE, COLUMN_USERNAME_SIZE, ROW_SIZE};
@@ -38,6 +39,7 @@ impl std::fmt::Display for Statement {
 
 fn main() -> Result<()> {
     let mut rl = DefaultEditor::new()?;
+    let mut table = Table::new();
 
     loop {
         let readline = rl.readline(&"lildb > ".paint(Color::Blue));
@@ -57,13 +59,9 @@ fn main() -> Result<()> {
                     continue;
                 }
 
-                match parsing_statement(&line) {
+                match parsing_statement(&mut table, &line) {
                     Ok(result) => match result {
-                        StatementCommandResult::Success(statement) => {
-                            println!(
-                                "The command related to {} would be executed here.",
-                                statement
-                            );
+                        StatementCommandResult::Success(_) => {
                             println!("Executed.");
                             continue;
                         }
@@ -104,7 +102,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn parsing_statement(line: &str) -> anyhow::Result<StatementCommandResult> {
+fn parsing_statement(table: &mut Table, line: &str) -> anyhow::Result<StatementCommandResult> {
     if line.contains("insert") {
         let input = line.split_whitespace().collect::<Vec<&str>>();
         if input.len() != 4 {
@@ -135,31 +133,21 @@ fn parsing_statement(line: &str) -> anyhow::Result<StatementCommandResult> {
         email[..input[3].len()].copy_from_slice(input[3].as_bytes());
 
         let row = Row {
-            id: input[1].parse().context(format!(
-                "{}",
-                "The row id is of type 'u32' for a User".error()
-            ))?,
-            username,
-            email,
+            data: [
+                [input[1].parse::<u8>().context("Error: Invalid id.")?].to_vec(),
+                username.to_vec(),
+                email.to_vec(),
+            ]
+            .concat()[..ROW_SIZE]
+                .try_into()
+                .unwrap(),
         };
 
-        let source = [0; ROW_SIZE];
-        let serialized_row = row.serialize(source);
-        println!("serialized_row: {:?}", serialized_row);
-
-        let deserialized_row = row.deserialize(serialized_row)?;
-        println!("deserialized_row: {:?}", deserialized_row);
-
-        println!(
-            "{}",
-            format!("Inserting {} in the database...", row).paint(Color::Cyan)
-        );
-
-        return Ok(StatementCommandResult::Success(Statement::Insert(row)));
+        return Ok(Table::execute(table, Statement::Insert(row)));
     }
 
     if line.contains("select") {
-        return Ok(StatementCommandResult::Success(Statement::Select));
+        return Ok(Table::execute(table, Statement::Select));
     }
 
     Ok(StatementCommandResult::Unrecognized)
