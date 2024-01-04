@@ -1,10 +1,15 @@
-use anyhow::Context;
 use paint::Paintable;
 use rustyline::{error::ReadlineError, DefaultEditor, Result};
-use std::fmt::Debug;
+use table::Table;
 use yansi::Color;
 
+use crate::row::Row;
+
+mod macro_helper;
+mod page;
 mod paint;
+mod row;
+mod table;
 
 const EXIT_SUCCESS: i32 = 0;
 pub enum MetaCommandResult {
@@ -32,15 +37,9 @@ impl std::fmt::Display for Statement {
     }
 }
 
-#[derive(Debug)]
-pub struct Row {
-    pub id: u64,
-    pub username: String,
-    pub email: String,
-}
-
 fn main() -> Result<()> {
     let mut rl = DefaultEditor::new()?;
+    let mut table = Table::new();
 
     loop {
         let readline = rl.readline(&"lildb > ".paint(Color::Blue));
@@ -60,18 +59,14 @@ fn main() -> Result<()> {
                     continue;
                 }
 
-                match parsing_statement(&line) {
+                match parsing_statement(&mut table, &line) {
                     Ok(result) => match result {
-                        StatementCommandResult::Success(statement) => {
-                            println!(
-                                "The command related to {} would be executed here.",
-                                statement
-                            );
+                        StatementCommandResult::Success(_) => {
                             println!("Executed.");
                             continue;
                         }
                         StatementCommandResult::SyntaxError(error) => {
-                            println!("{}", error);
+                            println!("{}", error.error());
                             continue;
                         }
                         StatementCommandResult::Unrecognized => {
@@ -107,35 +102,23 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn parsing_statement(line: &str) -> anyhow::Result<StatementCommandResult> {
+fn parsing_statement(table: &mut Table, line: &str) -> anyhow::Result<StatementCommandResult> {
     if line.contains("insert") {
         let input = line.split_whitespace().collect::<Vec<&str>>();
         if input.len() != 4 {
-            return Ok(StatementCommandResult::SyntaxError(format!(
-                "{}",
-                "Insert command takes exactly 3 args.".error()
-            )));
+            return Ok(StatementCommandResult::SyntaxError(
+                "Insert command takes exactly 3 args.".to_string(),
+            ));
         }
 
-        let row = Row {
-            id: input[1].parse().context(format!(
-                "{}",
-                "The row id is of type 'u64' for a User".error()
-            ))?,
-            username: input[2].to_owned(),
-            email: input[3].to_owned(),
-        };
-
-        println!(
-            "{}",
-            format!("Inserting {:?} in the database...", row).paint(Color::Cyan)
-        );
-
-        return Ok(StatementCommandResult::Success(Statement::Insert(row)));
+        match Row::new(input[1], input[2], input[3]) {
+            Ok(row) => return Ok(Table::execute(table, Statement::Insert(row))),
+            Err(error) => return Ok(StatementCommandResult::SyntaxError(error.to_string())),
+        }
     }
 
     if line.contains("select") {
-        return Ok(StatementCommandResult::Success(Statement::Select));
+        return Ok(Table::execute(table, Statement::Select));
     }
 
     Ok(StatementCommandResult::Unrecognized)
